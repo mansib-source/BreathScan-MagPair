@@ -1,0 +1,744 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>MagPair Mat Simulator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a bench-instrument page. Left: the mat and the baby. Right: the screen the ASHA worker sees.
+   Below: the signal path from raw field to result, then the record that gets saved. */
+:root{
+  --bg:#eef2f3; --surface:#ffffff; --surface-2:#f6f8f9; --ink:#14212b; --ink-2:#4a5a66; --ink-3:#7b8a95;
+  --line:#d5dde1; --grid:#e6ecef; --accent:#0d6f73; --accent-soft:#d8eeee;
+  --chest:#2f6fd0; --belly:#d9572a; --mat:#cfd9dd; --skin:#e9c9ad; --cloth:#f3f6f7;
+  --good:#1f8a4c; --good-bg:#e1f3e8; --warn:#b77905; --warn-bg:#fbf0d6; --crit:#c2322c; --crit-bg:#fbe3e1;
+  --screen-bg:#101b22; --screen-ink:#e9f1f3; --screen-ink-2:#9fb3bb; --screen-line:#24343d;
+  --f-display:"Familjen Grotesk","Segoe UI",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f171c; --surface:#16222a; --surface-2:#1b2932; --ink:#e4ecef; --ink-2:#a7b6be; --ink-3:#7c8d97;
+  --line:#2a3a44; --grid:#22313a; --accent:#4fb8bb; --accent-soft:#183a3d;
+  --chest:#4f8ae0; --belly:#dc6a38; --mat:#2c3b43; --skin:#b8927a; --cloth:#3a4952;
+  --good:#4cc07c; --good-bg:#16332a; --warn:#e2a93a; --warn-bg:#3a2f14; --crit:#ef6b62; --crit-bg:#3d1d1c;
+  --screen-bg:#0a1216; --screen-ink:#e9f1f3; --screen-ink-2:#93a7b0; --screen-line:#22323a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f171c; --surface:#16222a; --surface-2:#1b2932; --ink:#e4ecef; --ink-2:#a7b6be; --ink-3:#7c8d97;
+  --line:#2a3a44; --grid:#22313a; --accent:#4fb8bb; --accent-soft:#183a3d;
+  --chest:#4f8ae0; --belly:#dc6a38; --mat:#2c3b43; --skin:#b8927a; --cloth:#3a4952;
+  --good:#4cc07c; --good-bg:#16332a; --warn:#e2a93a; --warn-bg:#3a2f14; --crit:#ef6b62; --crit-bg:#3d1d1c;
+  --screen-bg:#0a1216; --screen-ink:#e9f1f3; --screen-ink-2:#93a7b0; --screen-line:#22323a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);margin:0}
+.wrap{max-width:1280px;margin:0 auto;padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:28px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(26px,3.4vw,36px);font-weight:700}
+h2{font-size:20px;font-weight:600}
+h3{font-size:15px;font-weight:600}
+.lede{color:var(--ink-2);max-width:72ch;margin:6px 0 0}
+.eyebrow{font:500 11px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;min-width:0}
+.top{display:grid;grid-template-columns:280px minmax(0,1fr) 320px;gap:18px;align-items:start}
+@media (max-width:1100px){.top{grid-template-columns:minmax(0,1fr) 320px}.controls{grid-column:1/-1}}
+@media (max-width:760px){.top{grid-template-columns:minmax(0,1fr)}}
+/* controls */
+.controls{display:grid;gap:16px}
+.ctl{display:grid;gap:6px}
+.ctl label{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--ink-2)}
+.ctl label b{font:500 13px var(--f-mono);color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button,.btn{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--surface-2);color:var(--ink);border-radius:999px;padding:6px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn:hover,.seg button:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+select{font:14px var(--f-body);padding:6px 8px;border-radius:6px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink)}
+.events{display:flex;flex-wrap:wrap;gap:6px}
+.hint{font-size:12px;color:var(--ink-3)}
+/* mat */
+.matpanel{display:grid;gap:10px}
+.matpanel canvas{width:100%;height:auto;aspect-ratio:16/7;display:block;border-radius:8px;background:var(--surface-2)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--ink-2)}
+.sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.readouts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media (max-width:560px){.readouts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.ro{background:var(--surface-2);border-radius:8px;padding:8px 10px;min-width:0}
+.ro .v{font:500 18px var(--f-mono);font-variant-numeric:tabular-nums}
+.ro .k{font-size:11px;color:var(--ink-3)}
+/* device */
+.device{background:var(--screen-bg);color:var(--screen-ink);border-radius:26px;padding:16px 16px 18px;border:6px solid var(--ink);box-shadow:0 10px 30px rgba(0,0,0,.18);display:grid;gap:12px;min-height:560px;align-content:start}
+.dev-top{display:flex;justify-content:space-between;align-items:center;font:500 12px var(--f-mono);color:var(--screen-ink-2)}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.steps span{height:4px;border-radius:2px;background:var(--screen-line)}
+.steps span.on{background:var(--accent)}
+.steplabels{display:grid;grid-template-columns:repeat(4,1fr);font-size:10px;color:var(--screen-ink-2);text-align:center}
+.dev-body{display:grid;gap:12px}
+.dev-title{font:600 19px var(--f-display)}
+.dev-text{font-size:13px;color:var(--screen-ink-2)}
+.dev-btn{font:600 15px var(--f-body);background:var(--accent);color:var(--screen-bg);border:0;border-radius:12px;padding:12px;cursor:pointer;width:100%}
+.dev-btn.ghost{background:transparent;color:var(--screen-ink);border:1px solid var(--screen-line)}
+.ring{width:150px;height:150px;margin:4px auto 0;display:block}
+.chip{display:flex;align-items:center;gap:10px;border-radius:14px;padding:12px 14px;font:700 22px var(--f-display)}
+.chip .ic{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font:700 16px var(--f-body)}
+.chip.g{background:var(--good-bg);color:var(--good)} .chip.g .ic{background:var(--good);color:var(--good-bg)}
+.chip.a{background:var(--warn-bg);color:var(--warn)} .chip.a .ic{background:var(--warn);color:var(--warn-bg)}
+.chip.r{background:var(--crit-bg);color:var(--crit)} .chip.r .ic{background:var(--crit);color:var(--crit-bg)}
+.chip.n{background:var(--screen-line);color:var(--screen-ink)} .chip.n .ic{background:var(--screen-ink-2);color:var(--screen-bg)}
+.kv{display:grid;grid-template-columns:1fr auto;gap:4px 10px;font-size:13px}
+.kv dt{color:var(--screen-ink-2)} .kv dd{margin:0;font:500 13px var(--f-mono);text-align:right}
+.qbar{display:flex;gap:3px;align-items:flex-end;height:16px}
+.qbar i{width:6px;border-radius:1px;background:var(--screen-line)}
+.qbar i.on{background:var(--accent)}
+.devfoot{font:11px var(--f-mono);color:var(--screen-ink-2);display:flex;justify-content:space-between;gap:8px;border-top:1px solid var(--screen-line);padding-top:10px}
+.gauge{width:100%;height:auto;display:block}
+/* signals */
+.sig-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+@media (max-width:900px){.sig-grid{grid-template-columns:minmax(0,1fr)}}
+.chart{display:grid;gap:8px;min-width:0}
+.chart canvas{width:100%;height:170px;display:block}
+.chart .cap{font-size:12px;color:var(--ink-3);max-width:70ch}
+.chart-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline}
+.liss{display:grid;grid-template-columns:minmax(0,220px) minmax(0,1fr);gap:16px;align-items:center}
+.liss canvas{height:220px}
+@media (max-width:520px){.liss{grid-template-columns:minmax(0,1fr)}}
+.step-n{font:500 12px var(--f-mono);color:var(--accent)}
+/* table */
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:13px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:500 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+td.c{text-align:center}
+.yes{color:var(--good);font-weight:600} .no{color:var(--ink-3)}
+.group td{background:var(--surface-2);font-weight:600;color:var(--ink-2);font-size:12px;letter-spacing:.02em}
+.note{font-size:13px;color:var(--ink-2);max-width:80ch}
+.rules{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:820px){.rules{grid-template-columns:minmax(0,1fr)}}
+.rule{border-left:3px solid var(--line);padding:2px 0 2px 12px;font-size:13px;color:var(--ink-2)}
+.rule.g{border-color:var(--good)} .rule.a{border-color:var(--warn)} .rule.r{border-color:var(--crit)}
+.rule b{color:var(--ink);display:block;font-family:var(--f-display);font-size:15px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">BreathScan · Concept 4 · virtual prototype</div>
+    <h1>MagPair Mat Simulator</h1>
+    <p class="lede">A baby lies on a mat with one magnetometer under its back, between the chest and the belly. Two small magnets ride on soft straps over the chest and belly. Change the baby and its breathing on the left, run a screening on the device on the right, and watch every signal the device works from.</p>
+  </header>
+
+  <section class="top">
+    <!-- controls -->
+    <div class="panel controls" aria-label="Baby and breathing">
+      <div><div class="eyebrow">Simulated baby</div><h2>Baby &amp; breathing</h2></div>
+      <div class="ctl">
+        <label for="age">Age <b id="ageV">8 months</b></label>
+        <input id="age" type="range" min="0" max="60" step="1" value="8">
+      </div>
+      <div class="ctl">
+        <span class="hint" style="color:var(--ink-2);font-size:13px">Breathing pattern</span>
+        <div class="seg" role="group" aria-label="Breathing pattern presets">
+          <button id="pNormal" aria-pressed="true">Normal</button>
+          <button id="pMild" aria-pressed="false">Mild TAA</button>
+          <button id="pPara" aria-pressed="false">Paradoxical</button>
+          <button id="pFast" aria-pressed="false">Fast, in step</button>
+        </div>
+      </div>
+      <div class="ctl">
+        <label for="rate">Breathing rate <b id="rateV">36 /min</b></label>
+        <input id="rate" type="range" min="12" max="80" step="1" value="36">
+      </div>
+      <div class="ctl">
+        <label for="lag">Chest lags belly by <b id="lagV">12°</b></label>
+        <input id="lag" type="range" min="0" max="180" step="1" value="12">
+      </div>
+      <div class="ctl">
+        <label for="amp">Chest / belly rise <b id="ampV">1.2 / 1.6 mm</b></label>
+        <input id="amp" type="range" min="0.4" max="4" step="0.1" value="1.2">
+      </div>
+      <div class="ctl">
+        <label for="mag">Magnet in each strap</label>
+        <select id="mag">
+          <option value="12x5">12 × 5 mm N52</option>
+          <option value="10x3" selected>10 × 3 mm N52</option>
+          <option value="6x2">6 × 2 mm N52</option>
+        </select>
+      </div>
+      <div class="ctl">
+        <span style="color:var(--ink-2);font-size:13px">Things that happen</span>
+        <div class="events">
+          <button class="btn" id="eCry">Baby wriggles (3 s)</button>
+          <button class="btn" id="eShift">Baby slides 2 cm</button>
+          <button class="btn" id="eReset">Re-centre baby</button>
+        </div>
+      </div>
+      <div class="ctl">
+        <label for="speed">Simulation speed <b id="speedV">1×</b></label>
+        <input id="speed" type="range" min="1" max="4" step="1" value="1">
+        <span class="hint">At 4× a 60-second screening takes 15 seconds.</span>
+      </div>
+    </div>
+
+    <!-- mat view -->
+    <div class="panel matpanel">
+      <div class="chart-head"><div><div class="eyebrow">Side view</div><h2>The mat</h2></div>
+        <span class="hint">Breathing motion drawn 6× larger than life</span></div>
+      <canvas id="mat" width="1200" height="525" aria-label="Side view of a baby on the sensor mat, with magnets on the chest and belly straps"></canvas>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--chest)"></i>Chest magnet</span>
+        <span><i class="sw" style="background:var(--belly)"></i>Belly magnet</span>
+        <span><i class="sw" style="background:var(--accent)"></i>Magnetometer</span>
+      </div>
+      <div class="readouts">
+        <div class="ro"><div class="k">Chest magnet to sensor</div><div class="v" id="roDc">–</div></div>
+        <div class="ro"><div class="k">Belly magnet to sensor</div><div class="v" id="roDb">–</div></div>
+        <div class="ro"><div class="k">Weaker signal, per mm of rise</div><div class="v" id="roB">–</div></div>
+        <div class="ro"><div class="k">Chest/belly separation</div><div class="v" id="roS">–</div></div>
+      </div>
+    </div>
+
+    <!-- device -->
+    <div class="device" aria-live="polite">
+      <div class="dev-top"><span>BreathScan</span><span id="devClock">ASHA · Sub-centre 14</span></div>
+      <div>
+        <div class="steps"><span id="s1"></span><span id="s2"></span><span id="s3"></span><span id="s4"></span></div>
+        <div class="steplabels"><span>Place</span><span>Calibrate</span><span>Measure</span><span>Result</span></div>
+      </div>
+      <div class="dev-body" id="devBody"></div>
+      <div class="devfoot"><span id="devAge">Child: 8 months</span><span id="devRec">Record –</span></div>
+    </div>
+  </section>
+
+  <!-- signal path -->
+  <section class="panel" style="display:grid;gap:22px">
+    <div><div class="eyebrow">Signal path</div><h2>From magnetic field to a result</h2>
+      <p class="lede" style="font-size:14px">Each step below is what the device's chip computes, 25 times a second. The charts show the last 20 seconds. Hover a chart to read values.</p></div>
+    <div class="sig-grid">
+      <div class="chart">
+        <div class="chart-head"><h3><span class="step-n">1 ·</span> Raw field change at the sensor</h3><span class="hint mono" id="rawRead"></span></div>
+        <canvas id="cRaw" aria-label="Raw magnetic field change at the chest and belly sensors, nanotesla"></canvas>
+        <div class="legend"><span><i class="sw" style="background:var(--chest)"></i>Up-down axis</span><span><i class="sw" style="background:var(--belly)"></i>Head-to-toe axis</span></div>
+        <p class="cap">The sensor feels both magnets on all three axes, so no axis is a clean chest or belly signal yet. Two axes are shown. Units: nanotesla (nT). Earth's field (about 45,000 nT) is removed by the filter.</p>
+      </div>
+      <div class="chart">
+        <div class="chart-head"><h3><span class="step-n">2 ·</span> Separated chest and belly movement</h3><span class="hint mono" id="sepRead"></span></div>
+        <canvas id="cSep" aria-label="Separated chest and belly movement in millimetres"></canvas>
+        <div class="legend"><span><i class="sw" style="background:var(--chest)"></i>Chest</span><span><i class="sw" style="background:var(--belly)"></i>Belly</span></div>
+        <p class="cap">The calibration presses tell the device how each magnet shows up on the sensor's three axes. With that, it unmixes the three readings into two movements, in millimetres.</p>
+      </div>
+      <div class="chart">
+        <div class="chart-head"><h3><span class="step-n">3 ·</span> Chest against belly</h3></div>
+        <div class="liss">
+          <canvas id="cLiss" aria-label="Chest plotted against belly over the last 8 seconds"></canvas>
+          <div class="cap" style="font-size:13px;color:var(--ink-2)">
+            <p style="margin:0 0 8px">Plot chest against belly and breathing traces a loop. In step, it is a thin diagonal line. As the chest falls behind, the loop opens. Fully paradoxical, it flips to the other diagonal.</p>
+            <p class="mono" style="margin:0;color:var(--ink)" id="lissRead">TAA –</p>
+          </div>
+        </div>
+      </div>
+      <div class="chart">
+        <div class="chart-head"><h3><span class="step-n">4 ·</span> Timing gap over time</h3><span class="hint mono" id="taaRead"></span></div>
+        <canvas id="cTaa" aria-label="Chest-belly timing gap in degrees over the last 90 seconds"></canvas>
+        <p class="cap">Recomputed every second over a 20-second window. Grey marks are windows the device threw away because the baby moved or the breathing wasn't regular.</p>
+      </div>
+      <div class="chart">
+        <div class="chart-head"><h3><span class="step-n">5 ·</span> Breathing rate over time</h3><span class="hint mono" id="rateRead"></span></div>
+        <canvas id="cRate" aria-label="Breathing rate in breaths per minute over the last 90 seconds"></canvas>
+        <p class="cap">The dashed line is the WHO fast-breathing cut-off for this child's age.</p>
+      </div>
+      <div class="chart">
+        <div class="chart-head"><h3><span class="step-n">6 ·</span> Signal quality</h3><span class="hint mono" id="qRead"></span></div>
+        <canvas id="cQ" aria-label="Breathing regularity score from 0 to 1 over the last 90 seconds"></canvas>
+        <p class="cap">How regular the last 20 seconds of breathing were, from 0 to 1. Below 0.4, or while the baby is moving, the window is not used.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- decision -->
+  <section class="panel" style="display:grid;gap:14px">
+    <div><div class="eyebrow">Decision</div><h2>How the device chooses a colour</h2></div>
+    <div class="rules">
+      <div class="rule g"><b>Green · no action</b>Rate under the WHO cut-off for the child's age, and the timing gap under the age band's lower limit.</div>
+      <div class="rule a"><b>Amber · recheck in 24 h</b>Fast breathing, or a timing gap between the two limits.</div>
+      <div class="rule r"><b>Red · refer to PHC today</b>A timing gap at or above the upper limit, or fast breathing together with a raised gap.</div>
+    </div>
+    <p class="note" id="ruleNote"></p>
+  </section>
+
+  <!-- data -->
+  <section class="panel" style="display:grid;gap:14px">
+    <div><div class="eyebrow">Data</div><h2>What each screening captures</h2>
+      <p class="lede" style="font-size:14px">One screening produces about 7,000 raw numbers (3 axes × 25 per second × about 95 seconds, including calibration), which are compressed into one saved record. The table shows what is collected, what the ASHA worker sees, and what is kept.</p></div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Data</th><th>Comes from</th><th>Rate or size</th><th>On screen</th><th>Saved in record</th></tr></thead>
+        <tbody>
+          <tr class="group"><td colspan="5">Entered by the ASHA worker</td></tr>
+          <tr><td>Child ID, age in months, sex</td><td>Typed or scanned from MCP card</td><td>Once</td><td class="c yes">Yes</td><td class="c yes">Yes</td></tr>
+          <tr><td>5 history questions: cough, fever, wheeze, feeding trouble, earlier episodes</td><td>Yes / no taps</td><td>Once</td><td class="c yes">Yes</td><td class="c yes">Yes</td></tr>
+          <tr><td>Baby state: asleep, calm awake, feeding</td><td>One tap</td><td>Once</td><td class="c yes">Yes</td><td class="c yes">Yes</td></tr>
+          <tr class="group"><td colspan="5">Measured by the mat</td></tr>
+          <tr><td>Magnetic field, 3 axes</td><td>One MMC5983MA under the back</td><td>100 Hz, averaged to 25 Hz · 4,500 values per axis per minute</td><td class="c no">No</td><td class="c">Raw trace kept for 7 days, for review</td></tr>
+          <tr><td>Chest/belly separation angle</td><td>Calibration presses</td><td>Once</td><td class="c">Yes, during measuring</td><td class="c yes">Yes</td></tr>
+          <tr><td>Calibration signatures (how each magnet shows on the sensor)</td><td>The two press steps</td><td>2 × 3 numbers</td><td class="c">Pass / redo</td><td class="c yes">Yes</td></tr>
+          <tr><td>Motion and position-change flags</td><td>Sudden jumps in the field</td><td>Per second</td><td class="c">As a warning</td><td class="c yes">Count</td></tr>
+          <tr class="group"><td colspan="5">Computed by the device</td></tr>
+          <tr><td>Chest and belly movement</td><td>Unmixing, step 2</td><td>25 Hz, mm</td><td class="c">Small live trace</td><td class="c">10 s sample</td></tr>
+          <tr><td>Breathing rate</td><td>Repeat time of the movement</td><td>Every second</td><td class="c yes">Yes</td><td class="c yes">Median</td></tr>
+          <tr><td>Chest–belly timing gap (TAA) and which leads</td><td>Phase at the breathing frequency</td><td>Every second</td><td class="c yes">Yes, with gauge</td><td class="c yes">Median and spread</td></tr>
+          <tr><td>Signal quality (regularity, usable seconds)</td><td>Breath-to-breath repeatability</td><td>Every second</td><td class="c yes">Bars</td><td class="c yes">Yes</td></tr>
+          <tr><td>Result colour and advice</td><td>Decision rules above</td><td>Once</td><td class="c yes">Yes</td><td class="c yes">Yes</td></tr>
+          <tr class="group"><td colspan="5">Added automatically</td></tr>
+          <tr><td>Date, time, device ID, ASHA ID, village code</td><td>Device settings</td><td>Once</td><td class="c">Footer</td><td class="c yes">Yes</td></tr>
+          <tr><td>Referral and follow-up date</td><td>Result</td><td>Once</td><td class="c yes">Yes</td><td class="c yes">Yes, shown as QR for the PHC</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">The colour thresholds for the timing gap are placeholders for this prototype. They vary with age, sleep state and position, and must be set with clinicians. The breathing-rate cut-offs are the WHO IMCI values.</p>
+  </section>
+</div>
+
+<script>
+(() => {
+// ------------------------------------------------------------ constants & helpers
+const FS = 25, WIN = 500, HIST = 90;               // samples/s, 20 s window, 90 s history
+const MU = 1e-7, BR = 1.45;
+const MAG = { "12x5": [12, 5], "10x3": [10, 3], "6x2": [6, 2] };
+const SENSOR_X = [0];                               // one sensor, at the mark on the mat (m)
+const SENSOR_Z = -0.006;
+const NOISE_NT = 20;
+const PRESS_END = 17;                               // 4 presses: 2 s down, 2 s up                                // per 25 Hz sample after averaging
+const EARTH = [40000, 2000, 10000];                 // nT
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+let rnd = (() => { let s = 12345; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; })();
+const gauss = () => { let u = 0, v = 0; while (!u) u = rnd(); v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+
+function moment(key) { const [d, h] = MAG[key]; const V = Math.PI * (d / 2000) ** 2 * (h / 1000); return BR / (4e-7 * Math.PI) * V; }
+function dipoleUp(m, rx, ry, rz) {           // field (nT) of a z-pointing dipole at offset r = sensor - magnet
+  const r2 = rx * rx + ry * ry + rz * rz, r = Math.sqrt(r2), r5 = r2 * r2 * r;
+  const k = MU * m * 1e9;
+  return [k * 3 * rx * rz / r5, k * 3 * ry * rz / r5, k * (3 * rz * rz - r2) / r5];
+}
+function shape(c, asym = 0.4) { const ph = c - Math.floor(c); return ph < asym ? 0.5 - 0.5 * Math.cos(Math.PI * ph / asym) : 0.5 + 0.5 * Math.cos(Math.PI * (ph - asym) / (1 - asym)); }
+
+// band-pass 0.15–2.5 Hz at 25 Hz (same coefficients as the firmware)
+const SOS = [[0.060771876648, 0.121543753295, 0.060771876648, -1.205692720953, 0.458402388297],
+             [1, -2, 1, -1.947311854921, 0.948852925001]];
+class BP { constructor() { this.reset(); } reset() { this.z = [[0, 0], [0, 0]]; this.x0 = null; }
+  step(x) { if (this.x0 === null) this.x0 = x; let y = x - this.x0;
+    for (let i = 0; i < 2; i++) { const [b0, b1, b2, a1, a2] = SOS[i], z = this.z[i]; const o = b0 * y + z[0]; z[0] = b1 * y - a1 * o + z[1]; z[1] = b2 * y - a2 * o; y = o; }
+    return y; } }
+class Ring { constructor(n) { this.a = new Float32Array(n); this.n = n; this.i = 0; this.c = 0; }
+  push(v) { this.a[this.i] = v; this.i = (this.i + 1) % this.n; if (this.c < this.n) this.c++; }
+  arr() { const o = new Float32Array(this.c); for (let k = 0; k < this.c; k++) o[k] = this.a[(this.i - this.c + k + this.n) % this.n]; return o; } }
+
+// TAA estimator: rate from summed autocorrelation, phase from one DFT bin (same as firmware)
+function analyse(c, b) {
+  const n = c.length, mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+  const mc = mean(c), mb = mean(b); const x = c.map(v => v - mc), y = b.map(v => v - mb);
+  const sd = a => Math.sqrt(a.reduce((s, v) => s + v * v, 0) / a.length);
+  const acf = (a, k) => { let s = 0; for (let i = 0; i + k < n; i++) s += a[i] * a[i + k]; return s; };
+  const c0 = acf(x, 0) + 1e-12, b0 = acf(y, 0) + 1e-12;
+  const LMIN = Math.floor(FS * 60 / 90), LMAX = Math.floor(FS * 60 / 9); const R = [];
+  for (let k = LMIN - 1; k <= LMAX; k++) R[k] = 0.5 * (acf(x, k) / c0 + acf(y, k) / b0);
+  let kb = -1; for (let k = LMIN + 1; k < LMAX - 1; k++) if (R[k] > R[k - 1] && R[k] >= R[k + 1] && R[k] > 0.3) { kb = k; break; }
+  if (kb < 0) { kb = LMIN; for (let k = LMIN; k < LMAX; k++) if (R[k] > R[kb]) kb = k; }
+  let lag = kb; const a = R[kb - 1], bb = R[kb], cc = R[kb + 1], den = a - 2 * bb + cc; if (den) lag += 0.5 * (a - cc) / den;
+  const f0 = FS / lag; let cr = 0, ci = 0, br = 0, bi = 0;
+  for (let i = 0; i < n; i++) { const w = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (n - 1)), th = 2 * Math.PI * f0 * i / FS;
+    cr += x[i] * w * Math.cos(th); ci -= x[i] * w * Math.sin(th); br += y[i] * w * Math.cos(th); bi -= y[i] * w * Math.sin(th); }
+  const ph = Math.atan2(ci * br - cr * bi, cr * br + ci * bi) * 180 / Math.PI;
+  return { rate: 60 * f0, phase: ph, taa: Math.abs(ph), per: R[kb], ampC: sd(x), ampB: sd(y) };
+}
+
+// ------------------------------------------------------------ age-dependent body & rules
+function body(age) {                           // metres
+  const t = clamp(age, 0, 60) / 60;
+  return { chestH: 0.090 + 0.045 * t, bellyH: 0.082 + 0.040 * t, gap: 0.060 + 0.055 * t, len: 0.55 + 0.45 * t };
+}
+const fastCut = a => a < 2 ? 60 : a < 12 ? 50 : 40;
+const taaBand = a => a < 3 ? [50, 110] : a < 12 ? [40, 100] : [30, 90];   // placeholders
+function decide(age, rate, taa) {
+  const [lo, hi] = taaBand(age), fast = rate >= fastCut(age);
+  if (taa >= hi || (fast && taa >= lo)) return { k: "r", label: "Refer to PHC today", why: fast ? "Fast breathing with a raised chest–belly gap." : "Chest and belly are moving strongly out of step." };
+  if (fast || taa >= lo) return { k: "a", label: "Recheck in 24 hours", why: fast ? "Breathing is faster than the WHO limit for this age." : "Chest and belly are partly out of step." };
+  return { k: "g", label: "No danger signs", why: "Normal rate, chest and belly moving together." };
+}
+
+// ------------------------------------------------------------ state
+const P = { age: 8, rate: 36, lag: 12, amp: 1.2, mag: "10x3", speed: 1 };
+const S = { t: 0, xc: -0.035, xcTarget: -0.035, wriggle: 0, wrigX: 0, wrigZc: 0, wrigZb: 0,
+  press: { who: null, t0: 0 }, phase: 0, rateNow: P.rate,
+  bpRaw: Array.from({ length: 3 }, () => new BP()), bpCue: new BP(),
+  A: null, Pinv: null, sepAng: null,
+  rawC: new Ring(WIN), rawB: new Ring(WIN), sepC: new Ring(WIN), sepB: new Ring(WIN),
+  hist: [], lastAnalysis: null, motionUntil: 0, deriv: new Ring(FS * 20), shiftFlag: false,
+  lpField: null, sinceAn: 0 };
+const dev = { state: "idle", t0: 0, cal: { c: null, b: null }, calBuf: [], results: [], record: null, moved: false };
+
+function presetSet(id) {
+  for (const b of ["pNormal", "pMild", "pPara", "pFast"]) $(b).setAttribute("aria-pressed", String(b === id));
+  const presets = { pNormal: [36, 12, 1.2], pMild: [44, 65, 1.4], pPara: [52, 165, 1.6], pFast: [62, 15, 1.3] };
+  const [r, l, a] = presets[id]; $("rate").value = r; $("lag").value = l; $("amp").value = a; readControls();
+}
+function readControls() {
+  P.age = +$("age").value; P.rate = +$("rate").value; P.lag = +$("lag").value; P.amp = +$("amp").value;
+  P.mag = $("mag").value; P.speed = +$("speed").value;
+  $("ageV").textContent = P.age < 24 ? `${P.age} month${P.age === 1 ? "" : "s"}` : `${(P.age / 12).toFixed(P.age % 12 ? 1 : 0)} years`;
+  $("rateV").textContent = `${P.rate} /min`; $("lagV").textContent = `${P.lag}°`;
+  $("ampV").textContent = `${P.amp.toFixed(1)} / ${(P.amp * 1.35).toFixed(1)} mm`; $("speedV").textContent = `${P.speed}×`;
+  $("devAge").textContent = `Child: ${$("ageV").textContent}`;
+  const [lo, hi] = taaBand(P.age);
+  $("ruleNote").textContent = `For a ${$("ageV").textContent} old: fast breathing is ${fastCut(P.age)} or more per minute (WHO IMCI). The timing-gap limits are ${lo}° and ${hi}° (placeholders).`;
+}
+["age", "rate", "lag", "amp", "mag", "speed"].forEach(id => $(id).addEventListener("input", () => {
+  if (["rate", "lag", "amp"].includes(id)) for (const b of ["pNormal", "pMild", "pPara", "pFast"]) $(b).setAttribute("aria-pressed", "false");
+  if (id === "mag" || id === "age") { invalidateCal("Settings changed. Calibrate again."); }
+  readControls();
+  if (id === "age") { S.xcTarget = -body(P.age).gap / 2; S.xc = S.xcTarget; }
+}));
+["pNormal", "pMild", "pPara", "pFast"].forEach(id => $(id).addEventListener("click", () => presetSet(id)));
+$("eCry").addEventListener("click", () => { S.wriggle = 3; });
+$("eShift").addEventListener("click", () => { S.xcTarget = S.xc + 0.02; });
+$("eReset").addEventListener("click", () => { S.xcTarget = -body(P.age).gap / 2; });
+
+function invalidateCal(msg) { if (dev.state === "measure" || dev.state === "result") { dev.state = "moved"; dev.msg = msg; } S.A = null; S.Pinv = null; }
+
+// ------------------------------------------------------------ physics, one 25 Hz sample
+function sample() {
+  const dt = 1 / FS; S.t += dt;
+  S.xc += (S.xcTarget - S.xc) * Math.min(1, dt * 3);
+  // breathing with ±5 % slow rate drift
+  S.rateNow = P.rate * (1 + 0.05 * Math.sin(2 * Math.PI * S.t / 37));
+  S.phase += S.rateNow / 60 * dt;
+  const B = body(P.age), ampC = P.amp / 1000, ampB = P.amp * 1.35 / 1000;
+  let dC = ampC * shape(S.phase - P.lag / 360), dB = ampB * shape(S.phase);
+  // calibration press (ASHA presses one strap ~2 mm, 2 s on / 2 s off, reacting 0.3 s late)
+  let cue = 0;
+  if (S.press.who) { const tp = S.t - S.press.t0; if (tp > 1 && tp < PRESS_END) { cue = (tp - 1) % 4 < 2 ? -1 : 0; }
+    const tr = tp - 0.3; const pressed = tr > 1 && tr < PRESS_END && ((tr - 1) % 4 < 2);
+    if (pressed) { if (S.press.who === "c") dC -= 0.002; else dB -= 0.002; } }
+  // wriggle
+  let wx = 0, wzc = 0, wzb = 0;
+  if (S.wriggle > 0) { S.wriggle -= dt; S.wrigX += gauss() * 0.0015; S.wrigZc += gauss() * 0.0012; S.wrigZb += gauss() * 0.0012;
+    S.wrigX *= 0.9; S.wrigZc *= 0.85; S.wrigZb *= 0.85; wx = S.wrigX; wzc = S.wrigZc; wzb = S.wrigZb; S.motionUntil = S.t + 2; }
+  const m = moment(P.mag);
+  const mc = [S.xc + wx, 0, B.chestH + dC + wzc], mb = [S.xc + B.gap + wx, 0, B.bellyH + dB + wzb];
+  const sx = SENSOR_X[0];
+  const f1 = dipoleUp(m, sx - mc[0], -mc[1], SENSOR_Z - mc[2]), f2 = dipoleUp(m, sx - mb[0], -mb[1], SENSOR_Z - mb[2]);
+  const raw = [f1[0] + f2[0] + EARTH[0] + gauss() * NOISE_NT, f1[1] + f2[1] + EARTH[1] + gauss() * NOISE_NT, f1[2] + f2[2] + EARTH[2] + gauss() * NOISE_NT];
+  S.geom = { mc, mb, dC, dB, B, m };
+  // band-pass the sensor's 3 axes
+  const f = raw.map((v, i) => S.bpRaw[i].step(v));
+  const fc = S.bpCue.step(cue);
+  S.rawC.push(f[2]); S.rawB.push(f[0]);
+  // position-change detector on the slow field
+  const zsum = raw[2];
+  if (S.lpField === null) S.lpField = zsum; const prev = S.lpField; S.lpField += (zsum - S.lpField) * 0.02;
+  if (S.A && Math.abs(S.lpField - (S.calField ?? S.lpField)) > 1500 && S.wriggle <= 0) { invalidateCal("The baby moved on the mat. Re-centre and calibrate again."); }
+  // motion detector: short-term derivative energy vs the last 20 s
+  const d = Math.hypot(f[2] - (S.lastF2 ?? f[2]), f[0] - (S.lastF0 ?? f[0])); S.lastF2 = f[2]; S.lastF0 = f[0]; S.deriv.push(d);
+  // calibration buffer
+  if (dev.state === "calC" || dev.state === "calB") dev.calBuf.push({ f, cue: fc });
+  // unmix
+  let sc = 0, sb = 0;
+  if (S.Pinv) { for (let i = 0; i < 3; i++) { sc += S.Pinv[0][i] * f[i]; sb += S.Pinv[1][i] * f[i]; } sc *= 2; sb *= 2; }
+  S.sepC.push(sc); S.sepB.push(sb);
+  // analysis once a second
+  if (++S.sinceAn >= FS) { S.sinceAn = 0; analysisTick(); }
+}
+
+function analysisTick() {
+  if (!S.Pinv || S.sepC.c < WIN) return;
+  const r = analyse(S.sepC.arr(), S.sepB.arr());
+  const moving = S.t < S.motionUntil + 18;          // any motion inside the window
+  r.valid = !moving && r.per >= 0.4 && r.ampC > 0.05;
+  r.t = S.t; S.lastAnalysis = r; S.hist.push(r); while (S.hist.length && S.hist[0].t < S.t - HIST) S.hist.shift();
+  if (dev.state === "measure") dev.results.push(r);
+}
+
+// ------------------------------------------------------------ calibration (press method)
+function fitSignature(buf) {
+  const skip = FS * 1, n = buf.length; let best = -1, out = null;
+  for (let L = 0; L <= 20; L++) { let rr = 0; const xr = [0, 0, 0];
+    for (let t = skip + 20; t < n; t++) { const r = buf[t - L].cue; rr += r * r; for (let j = 0; j < 3; j++) xr[j] += buf[t].f[j] * r; }
+    if (!rr) continue; const e = xr.reduce((s, v) => s + v * v, 0) / rr; if (e > best) { best = e; out = xr.map(v => v / rr); } }
+  return out;
+}
+function solvePinv(a, b) {
+  let g00 = 0, g01 = 0, g11 = 0; for (let i = 0; i < 3; i++) { g00 += a[i] * a[i]; g01 += a[i] * b[i]; g11 += b[i] * b[i]; }
+  const det = g00 * g11 - g01 * g01; if (Math.abs(det) < 1e-9 * g00 * g11) return null;
+  const i00 = g11 / det, i01 = -g01 / det, i11 = g00 / det;
+  const Pm = [[], []]; for (let i = 0; i < 3; i++) { Pm[0][i] = i00 * a[i] + i01 * b[i]; Pm[1][i] = i01 * a[i] + i11 * b[i]; }
+  const ang = Math.acos(Math.min(1, Math.abs(g01) / Math.sqrt(g00 * g11))) * 180 / Math.PI;
+  return { Pm, ang };
+}
+
+// ------------------------------------------------------------ device screen
+function setSteps(n) { for (let i = 1; i <= 4; i++) $("s" + i).className = i <= n ? "on" : ""; }
+let lastDevKey = "";
+function renderDevice(force) {
+  const st = dev.state, body = $("devBody");
+  const key = st + (st === "measure" || st.startsWith("cal") ? Math.floor(S.t * 4) : "") + (dev.record ? dev.record.id : "");
+  if (!force && key === lastDevKey) return; lastDevKey = key;
+  if (st === "idle") {
+    setSteps(1);
+    body.innerHTML = `<div class="dev-title">Place the baby</div>
+      <div class="dev-text">Lay the baby on its back so the sensor mark sits under the back, between chest and belly. Close the two straps so the magnets rest on the chest and belly. Snug, not tight.</div>
+      <dl class="kv"><dt>Baby state</dt><dd>Asleep</dd><dt>History questions</dt><dd>5 of 5 answered</dd></dl>
+      <button class="dev-btn" id="dStart">Start screening</button>`;
+    $("dStart").onclick = () => startCal("c");
+  } else if (st === "calC" || st === "calB") {
+    setSteps(2);
+    const tp = S.t - S.press.t0, on = tp > 1 && tp < PRESS_END && ((tp - 1) % 4 < 2), left = Math.max(0, PRESS_END - tp);
+    body.innerHTML = `<div class="dev-title">Calibrate: ${st === "calC" ? "chest" : "belly"} strap</div>
+      <div class="dev-text">Press the ${st === "calC" ? "chest" : "belly"} magnet down gently each time the light turns on.</div>
+      <svg viewBox="0 0 150 150" class="ring" aria-hidden="true"><circle cx="75" cy="75" r="46" fill="${on ? getVar(st === "calC" ? "--chest" : "--belly") : "none"}" stroke="${getVar(st === "calC" ? "--chest" : "--belly")}" stroke-width="4"/>
+      <text x="75" y="81" text-anchor="middle" font-family="IBM Plex Sans" font-weight="600" font-size="16" fill="${on ? getVar("--screen-bg") : getVar("--screen-ink")}">${on ? "PRESS" : "release"}</text></svg>
+      <div class="dev-text mono" style="text-align:center">${left.toFixed(0)} s left</div>`;
+  } else if (st === "measure") {
+    setSteps(3);
+    const el = S.t - dev.t0, left = Math.max(0, 60 - el), frac = Math.min(1, el / 60);
+    const r = S.lastAnalysis, moving = S.t < S.motionUntil;
+    const q = r ? Math.round(clamp((r.per - 0.2) / 0.7, 0, 1) * 5) : 0;
+    const C = 2 * Math.PI * 62;
+    body.innerHTML = `<div class="dev-title">Measuring</div>
+      <div class="dev-text">${moving ? "Baby is moving. Waiting for the baby to settle." : el < 20 ? "Settling: reading the first 20 seconds." : "Keep the baby still. Don't touch the straps."}</div>
+      <svg viewBox="0 0 150 150" class="ring" role="img" aria-label="${left.toFixed(0)} seconds left"><circle cx="75" cy="75" r="62" fill="none" stroke="${getVar("--screen-line")}" stroke-width="8"/>
+      <circle cx="75" cy="75" r="62" fill="none" stroke="${getVar("--accent")}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${C * frac} ${C}" transform="rotate(-90 75 75)"/>
+      <text x="75" y="80" text-anchor="middle" font-family="IBM Plex Mono" font-size="26" fill="${getVar("--screen-ink")}">${left.toFixed(0)}s</text></svg>
+      <dl class="kv"><dt>Breaths per minute</dt><dd>${r && r.valid ? r.rate.toFixed(0) : "–"}</dd>
+      <dt>Signal</dt><dd><span class="qbar">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= q && !moving ? "on" : ""}" style="height:${4 + i * 2.4}px"></i>`).join("")}</span></dd>
+      <dt>Usable readings</dt><dd>${dev.results.filter(x => x.valid).length}</dd>
+      <dt>Chest/belly separation</dt><dd>${S.sepAng ? S.sepAng.toFixed(0) + "°" : "–"}</dd></dl>`;
+  } else if (st === "result") {
+    setSteps(4);
+    const R = dev.record;
+    if (!R.ok) {
+      body.innerHTML = `<div class="chip n"><span class="ic">?</span>Repeat test</div>
+        <div class="dev-text">Only ${R.usable} of 41 readings were usable. Calm the baby, check the straps, and run again.</div>
+        <button class="dev-btn" id="dAgain">Run again</button>`;
+    } else {
+      body.innerHTML = `<div class="chip ${R.d.k}"><span class="ic">${R.d.k === "g" ? "✓" : "!"}</span>${R.d.k === "g" ? "Green" : R.d.k === "a" ? "Amber" : "Red"}</div>
+        <div class="dev-title" style="font-size:17px">${R.d.label}</div>
+        <div class="dev-text">${R.d.why}</div>
+        ${gaugeSVG(R.taa, taaBand(P.age))}
+        <dl class="kv"><dt>Breathing rate</dt><dd>${R.rate.toFixed(0)} /min (limit ${fastCut(P.age)})</dd>
+        <dt>Chest–belly gap</dt><dd>${R.taa.toFixed(0)}° ± ${R.spread.toFixed(0)}°</dd>
+        <dt>${R.lead}</dt><dd></dd>
+        <dt>Usable readings</dt><dd>${R.usable} of 41</dd></dl>
+        <button class="dev-btn" id="dAgain">New screening</button>`;
+    }
+    $("dAgain").onclick = () => { dev.state = "idle"; renderDevice(true); };
+  } else if (st === "moved") {
+    setSteps(2);
+    body.innerHTML = `<div class="chip n"><span class="ic">!</span>Paused</div><div class="dev-text">${dev.msg}</div>
+      <button class="dev-btn" id="dRecal">Calibrate again</button><button class="dev-btn ghost" id="dCancel">Cancel</button>`;
+    $("dRecal").onclick = () => startCal("c"); $("dCancel").onclick = () => { dev.state = "idle"; renderDevice(true); };
+  }
+}
+function gaugeSVG(taa, [lo, hi]) {
+  const cx = 130, cy = 120, r = 96, pt = (deg, rr = r) => { const a = Math.PI * (1 - deg / 180); return [cx + rr * Math.cos(a), cy - rr * Math.sin(a)]; };
+  const arc = (a, b, col) => { const [x1, y1] = pt(a), [x2, y2] = pt(b); return `<path d="M${x1} ${y1} A${r} ${r} 0 0 1 ${x2} ${y2}" stroke="${col}" stroke-width="14" fill="none"/>`; };
+  const [nx, ny] = pt(taa, r - 26);
+  return `<svg viewBox="0 0 260 140" class="gauge" role="img" aria-label="Chest-belly gap ${taa.toFixed(0)} degrees on a 0 to 180 scale">
+    ${arc(0, lo, getVar("--good"))}${arc(lo, hi, getVar("--warn"))}${arc(hi, 180, getVar("--crit"))}
+    <line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="${getVar("--screen-ink")}" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="${cx}" cy="${cy}" r="5" fill="${getVar("--screen-ink")}"/>
+    <text x="${cx - r}" y="${cy + 16}" font-family="IBM Plex Mono" font-size="10" fill="${getVar("--screen-ink-2")}" text-anchor="middle">0° in step</text>
+    <text x="${cx + r}" y="${cy + 16}" font-family="IBM Plex Mono" font-size="10" fill="${getVar("--screen-ink-2")}" text-anchor="middle">180° opposite</text></svg>`;
+}
+function startCal(who) {
+  dev.state = who === "c" ? "calC" : "calB"; dev.calBuf = []; S.press = { who, t0: S.t };
+  if (who === "c") { S.A = null; S.Pinv = null; S.hist = []; S.lastAnalysis = null; }
+  renderDevice(true);
+}
+function deviceTick() {
+  if (dev.state === "calC" || dev.state === "calB") {
+    if (S.t - S.press.t0 >= PRESS_END + 0.5) {
+      const sig = fitSignature(dev.calBuf);
+      if (dev.state === "calC") { dev.cal.c = sig; startCal("b"); }
+      else { dev.cal.b = sig; S.press = { who: null, t0: 0 };
+        const sol = solvePinv(dev.cal.c, dev.cal.b);
+        if (!sol) { dev.state = "moved"; dev.msg = "Calibration failed. Check that both magnets are on the straps."; }
+        else if (sol.ang < 30) { dev.state = "moved"; dev.msg = `Chest and belly look too alike to the sensor (${sol.ang.toFixed(0)}°). Move the baby so the sensor mark sits between chest and belly, then calibrate again.`; }
+        else { S.A = [dev.cal.c, dev.cal.b]; S.Pinv = sol.Pm; S.sepAng = sol.ang; S.calField = S.lpField;
+          S.sepC = new Ring(WIN); S.sepB = new Ring(WIN); S.hist = [];
+          dev.state = "measure"; dev.t0 = S.t; dev.results = []; }
+        renderDevice(true);
+      }
+    }
+  } else if (dev.state === "measure" && S.t - dev.t0 >= 60) {
+    // the first 20 s fill the analysis window; results come from the last 40 s (41 windows)
+    const v = dev.results.filter(r => r.valid), med = a => { const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+    const id = "BS-" + (1000 + Math.floor(rnd() * 9000));
+    if (v.length < 15) dev.record = { ok: false, usable: v.length, id };
+    else { const taa = med(v.map(r => r.taa)), rate = med(v.map(r => r.rate)), ph = med(v.map(r => r.phase));
+      const q = v.map(r => r.taa).sort((a, b) => a - b), spread = (q[Math.floor(q.length * 0.75)] - q[Math.floor(q.length * 0.25)]) / 2;
+      dev.record = { ok: true, taa, rate, spread, usable: v.length, id, d: decide(P.age, rate, taa), lead: ph < 0 ? "Belly leads, chest lags" : "Chest leads" }; }
+    $("devRec").textContent = `Record ${dev.record.id} · saved`;
+    dev.state = "result"; renderDevice(true);
+  }
+}
+
+// ------------------------------------------------------------ drawing
+let css = {};
+function getVar(n) { return css[n] || (css[n] = getComputedStyle(document.documentElement).getPropertyValue(n).trim()); }
+function refreshCss() { css = {}; renderDevice(true); }
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", refreshCss);
+new MutationObserver(refreshCss).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+function fit(cv) { const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; } const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); return [g, r.width, r.height]; }
+
+function drawMat() {
+  const cv = $("mat"); const [g, W, H] = fit(cv); g.clearRect(0, 0, W, H);
+  const G = S.geom; if (!G) return;
+  const sc = W / 0.40, ox = W * 0.36, base = H * 0.80, ex = 6;              // px per metre, origin, mat top
+  const X = x => ox + x * sc, Z = z => base - z * sc;
+  // mat
+  g.fillStyle = getVar("--mat"); g.fillRect(8, base, W - 16, H * 0.07);
+  g.fillStyle = getVar("--surface-2"); g.fillRect(8, base + H * 0.07, W - 16, 2);
+  // the one sensor, with its placement window (±4 cm) marked on the mat
+  g.fillStyle = getVar("--accent"); g.globalAlpha = 0.14; g.fillRect(X(-0.04), base, X(0.04) - X(-0.04), H * 0.07); g.globalAlpha = 1;
+  g.fillStyle = getVar("--accent"); g.fillRect(X(SENSOR_X[0]) - 9, base + H * 0.022, 18, 11);
+  // baby body (side view, lying on back): torso from head to hips
+  const { B } = G, xc = S.xc + (S.wrigX || 0) * 0;
+  const chestTop = Z(B.chestH + G.dC * ex), bellyTop = Z(B.bellyH + G.dB * ex);
+  const xHead = X(S.xc - 0.085 - B.len * 0.06), xChest = X(S.xc), xBelly = X(S.xc + B.gap), xHip = X(S.xc + B.gap + 0.05 + B.len * 0.04);
+  g.fillStyle = getVar("--cloth"); g.strokeStyle = getVar("--ink-2"); g.lineWidth = 1.5;
+  g.beginPath(); g.moveTo(X(S.xc - 0.055), base);
+  g.bezierCurveTo(X(S.xc - 0.05), Z(B.chestH * 0.9), X(S.xc - 0.03), chestTop, xChest, chestTop);
+  g.bezierCurveTo((xChest + xBelly) / 2, chestTop + (bellyTop - chestTop) * 0.4 + 6, (xChest + xBelly) / 2, bellyTop, xBelly, bellyTop);
+  g.bezierCurveTo(xBelly + 18, bellyTop, xHip, Z(B.bellyH * 0.75), xHip, base);
+  g.closePath(); g.fill(); g.stroke();
+  // legs
+  g.beginPath(); g.moveTo(xHip - 4, Z(B.bellyH * 0.45)); g.quadraticCurveTo(xHip + 40, Z(B.bellyH * 0.9), xHip + 70, Z(B.bellyH * 0.35));
+  g.quadraticCurveTo(xHip + 76, base - 4, xHip + 40, base); g.lineTo(xHip - 4, base); g.closePath(); g.fill(); g.stroke();
+  // head
+  const hr = (B.chestH * 0.55) * sc; g.fillStyle = getVar("--skin");
+  g.beginPath(); g.arc(X(S.xc - 0.06) - hr * 0.9, base - hr, hr, 0, Math.PI * 2); g.fill(); g.stroke();
+  // straps + magnets
+  [[xChest, chestTop, "--chest"], [xBelly, bellyTop, "--belly"]].forEach(([x, y, col]) => {
+    g.strokeStyle = getVar(col); g.lineWidth = 4; g.globalAlpha = 0.35;
+    g.beginPath(); g.moveTo(x - 10, base); g.lineTo(x - 6, y); g.lineTo(x + 6, y); g.lineTo(x + 10, base); g.stroke(); g.globalAlpha = 1;
+    g.fillStyle = getVar(col); g.beginPath(); g.roundRect ? g.roundRect(x - 11, y - 9, 22, 9, 3) : g.rect(x - 11, y - 9, 22, 9); g.fill();
+  });
+  // field lines to the sensors in use (faint)
+  g.lineWidth = 1; g.setLineDash([3, 5]);
+  [[xChest, chestTop, 0, "--chest"], [xBelly, bellyTop, 0, "--belly"]].forEach(([x, y, si, col]) => {
+    g.strokeStyle = getVar(col); g.globalAlpha = 0.6; g.beginPath(); g.moveTo(x, y); g.lineTo(X(SENSOR_X[si]), base + H * 0.025); g.stroke(); g.globalAlpha = 1; });
+  g.setLineDash([]);
+  // labels
+  g.fillStyle = getVar("--ink-2"); g.font = `12px ${getVar("--f-body") || "sans-serif"}`;
+  g.fillText("one magnetometer under the back · shaded band: where the chest–belly midpoint should sit", 12, base + H * 0.12 + 6);
+  if (S.wriggle > 0) { g.fillStyle = getVar("--warn"); g.font = `600 13px ${getVar("--f-body")}`; g.fillText("Baby wriggling", 12, 20); }
+  // readouts
+  const dc = Math.hypot(G.mc[0] - SENSOR_X[0], G.mc[2] - SENSOR_Z), db = Math.hypot(G.mb[0] - SENSOR_X[0], G.mb[2] - SENSOR_Z);
+  $("roDc").textContent = (dc * 100).toFixed(1) + " cm"; $("roDb").textContent = (db * 100).toFixed(1) + " cm";
+  // live separation estimate from geometry (the device itself learns it from the presses)
+  const sigOf = (mx, mz) => { const a = dipoleUp(G.m, SENSOR_X[0] - mx, 0, SENSOR_Z - mz), b = dipoleUp(G.m, SENSOR_X[0] - mx, 0, SENSOR_Z - mz - 0.001); return a.map((v, i) => b[i] - v); };
+  const sa = sigOf(G.mc[0], G.mc[2]), sb = sigOf(G.mb[0], G.mb[2]);
+  const dot = sa[0] * sb[0] + sa[1] * sb[1] + sa[2] * sb[2], na = Math.hypot(...sa), nb = Math.hypot(...sb);
+  const ang = Math.acos(Math.min(1, Math.abs(dot) / (na * nb))) * 180 / Math.PI;
+  $("roB").textContent = Math.min(na, nb).toFixed(0) + " nT";
+  $("roS").textContent = ang.toFixed(0) + "°" + (ang < 30 ? " · poor" : ang < 45 ? " · fair" : " · good");
+}
+
+// generic time chart
+const hover = {};
+["cRaw", "cSep", "cTaa", "cRate", "cQ"].forEach(id => { const cv = $(id);
+  cv.addEventListener("pointermove", e => { const r = cv.getBoundingClientRect(); hover[id] = (e.clientX - r.left) / r.width; });
+  cv.addEventListener("pointerleave", () => { hover[id] = null; }); });
+
+function timeChart(id, series, opt) {
+  const [g, W, H] = fit($(id)); g.clearRect(0, 0, W, H);
+  const L = 44, Rr = 10, T = 10, Bt = 24, w = W - L - Rr, h = H - T - Bt;
+  let lo = opt.min, hi = opt.max;
+  if (lo === undefined) { lo = Infinity; hi = -Infinity; series.forEach(s => s.y.forEach(v => { if (v != null && isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }));
+    if (!isFinite(lo)) { lo = -1; hi = 1; } const pad = (hi - lo) * 0.12 || 1; lo -= pad; hi += pad; if (opt.sym) { const m = Math.max(Math.abs(lo), Math.abs(hi)); lo = -m; hi = m; } }
+  const xs = i => L + (i / Math.max(1, opt.n - 1)) * w, ys = v => T + (1 - (v - lo) / (hi - lo)) * h;
+  // grid + ticks
+  g.strokeStyle = getVar("--grid"); g.lineWidth = 1; g.fillStyle = getVar("--ink-3"); g.font = `11px ${getVar("--f-mono")}`; g.textAlign = "right"; g.textBaseline = "middle";
+  const ticks = opt.ticks || niceTicks(lo, hi, 4);
+  ticks.forEach(v => { const y = ys(v); g.beginPath(); g.moveTo(L, y); g.lineTo(W - Rr, y); g.stroke(); g.fillText(opt.fmt ? opt.fmt(v) : String(v), L - 6, y); });
+  g.textAlign = "center"; g.textBaseline = "top";
+  (opt.xticks || []).forEach(([i, lab]) => g.fillText(lab, xs(i), H - Bt + 6));
+  if (opt.ref) { g.strokeStyle = getVar("--ink-3"); g.setLineDash([5, 4]); g.beginPath(); g.moveTo(L, ys(opt.ref)); g.lineTo(W - Rr, ys(opt.ref)); g.stroke(); g.setLineDash([]); }
+  (opt.bands || []).forEach(([a, b, col]) => { g.fillStyle = getVar(col); g.globalAlpha = 0.10; g.fillRect(L, ys(b), w, ys(a) - ys(b)); g.globalAlpha = 1; });
+  series.forEach(s => {
+    if (s.dots) { s.y.forEach((v, i) => { if (v == null) return; g.fillStyle = s.ok && !s.ok[i] ? getVar("--ink-3") : getVar(s.col); g.beginPath(); g.arc(xs(s.x ? s.x[i] : i), ys(v), 3, 0, 7); g.fill(); }); return; }
+    g.strokeStyle = getVar(s.col); g.lineWidth = 2; g.lineJoin = "round"; g.beginPath(); let started = false;
+    s.y.forEach((v, i) => { if (v == null) { started = false; return; } const X = xs(s.x ? s.x[i] : i), Y = ys(v); started ? g.lineTo(X, Y) : g.moveTo(X, Y); started = true; }); g.stroke(); });
+  // hover
+  const hv = hover[id];
+  if (hv != null && series[0] && series[0].y.length) {
+    const xpx = hv * W; if (xpx >= L && xpx <= W - Rr) {
+      const iF = (xpx - L) / w * (opt.n - 1);
+      g.strokeStyle = getVar("--ink-3"); g.beginPath(); g.moveTo(xpx, T); g.lineTo(xpx, T + h); g.stroke();
+      const parts = series.map(s => { let best = null, bd = 1e9; s.y.forEach((v, i) => { const xi = s.x ? s.x[i] : i; if (v != null && Math.abs(xi - iF) < bd) { bd = Math.abs(xi - iF); best = v; } }); return best == null ? null : `${s.name} ${opt.fmt ? opt.fmt(best) : best.toFixed(1)}${opt.unit || ""}`; }).filter(Boolean);
+      if (opt.readEl) $(opt.readEl).textContent = parts.join(" · ");
+    }
+  } else if (opt.readEl) $(opt.readEl).textContent = opt.idle || "";
+}
+function niceTicks(lo, hi, n) { const span = hi - lo, step0 = span / n, mag = 10 ** Math.floor(Math.log10(step0)), err = step0 / mag;
+  const step = (err >= 7 ? 10 : err >= 3 ? 5 : err >= 1.5 ? 2 : 1) * mag; const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(6)); return out; }
+
+function drawCharts() {
+  const n = WIN, secTicks = [[0, "−20 s"], [n * 0.5, "−10 s"], [n - 1, "now"]];
+  const pad = a => { const o = Array(n - a.length).fill(null); return o.concat(Array.from(a)); };
+  timeChart("cRaw", [{ y: pad(S.rawC.arr()), col: "--chest", name: "up-down" }, { y: pad(S.rawB.arr()), col: "--belly", name: "head-to-toe" }],
+    { n, xticks: secTicks, fmt: v => v.toFixed(0), unit: " nT", readEl: "rawRead", idle: "nT" });
+  if (S.Pinv) timeChart("cSep", [{ y: pad(S.sepC.arr()), col: "--chest", name: "chest" }, { y: pad(S.sepB.arr()), col: "--belly", name: "belly" }],
+    { n, xticks: secTicks, fmt: v => v.toFixed(1), unit: " mm", readEl: "sepRead", idle: "mm" });
+  else { const [g, W, H] = fit($("cSep")); g.clearRect(0, 0, W, H); g.fillStyle = getVar("--ink-3"); g.font = `13px ${getVar("--f-body")}`; g.textAlign = "center";
+    g.fillText(dev.state.startsWith("cal") ? "Calibrating: the presses teach the device each magnet's signature" : "Start a screening on the device to calibrate", W / 2, H / 2); $("sepRead").textContent = ""; }
+  // history charts
+  const hh = S.hist, xs = hh.map(r => HIST - (S.t - r.t)), hTicks = [[0, "−90 s"], [45, "−45 s"], [HIST, "now"]];
+  const [lo, hi] = taaBand(P.age);
+  timeChart("cTaa", [{ y: hh.map(r => r.taa), x: xs, ok: hh.map(r => r.valid), col: "--accent", name: "TAA", dots: true }],
+    { n: HIST + 1, min: 0, max: 180, ticks: [0, 45, 90, 135, 180], xticks: hTicks, fmt: v => v.toFixed(0), unit: "°", readEl: "taaRead",
+      idle: S.lastAnalysis ? `now ${S.lastAnalysis.taa.toFixed(0)}°` : "", bands: [[0, lo, "--good"], [lo, hi, "--warn"], [hi, 180, "--crit"]] });
+  timeChart("cRate", [{ y: hh.map(r => r.rate), x: xs, ok: hh.map(r => r.valid), col: "--accent", name: "rate", dots: true }],
+    { n: HIST + 1, min: 0, max: 90, ticks: [0, 30, 60, 90], xticks: hTicks, fmt: v => v.toFixed(0), unit: "/min", readEl: "rateRead",
+      idle: S.lastAnalysis ? `now ${S.lastAnalysis.rate.toFixed(0)} /min` : "", ref: fastCut(P.age) });
+  timeChart("cQ", [{ y: hh.map(r => r.per), x: xs, ok: hh.map(r => r.valid), col: "--accent", name: "regularity", dots: true }],
+    { n: HIST + 1, min: 0, max: 1, ticks: [0, 0.4, 1], xticks: hTicks, fmt: v => v.toFixed(2), unit: "", readEl: "qRead", ref: 0.4,
+      idle: S.lastAnalysis ? `now ${S.lastAnalysis.per.toFixed(2)}` : "" });
+  drawLiss();
+}
+function drawLiss() {
+  const [g, W, H] = fit($("cLiss")); g.clearRect(0, 0, W, H);
+  const sz = Math.min(W, H) - 20, ox = (W - sz) / 2, oy = (H - sz) / 2;
+  g.strokeStyle = getVar("--grid"); g.lineWidth = 1; g.strokeRect(ox, oy, sz, sz);
+  g.beginPath(); g.moveTo(ox + sz / 2, oy); g.lineTo(ox + sz / 2, oy + sz); g.moveTo(ox, oy + sz / 2); g.lineTo(ox + sz, oy + sz / 2); g.stroke();
+  g.fillStyle = getVar("--ink-3"); g.font = `11px ${getVar("--f-mono")}`; g.textAlign = "center"; g.fillText("belly →", ox + sz / 2, oy + sz + 14 > H ? H - 2 : oy + sz + 12);
+  g.save(); g.translate(ox - 6, oy + sz / 2); g.rotate(-Math.PI / 2); g.fillText("chest →", 0, 0); g.restore();
+  if (!S.Pinv || S.sepC.c < FS * 8) { $("lissRead").textContent = "TAA – (calibrate first)"; return; }
+  const c = S.sepC.arr().slice(-FS * 8), b = S.sepB.arr().slice(-FS * 8);
+  const sd = a => { const m = a.reduce((s, v) => s + v, 0) / a.length; return [m, Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / a.length) || 1]; };
+  const [mc, scc] = sd(c), [mb, sbb] = sd(b), k = sz / 2 / 2.6;
+  g.strokeStyle = getVar("--accent"); g.lineWidth = 2; g.beginPath();
+  for (let i = 0; i < c.length; i++) { const X = ox + sz / 2 + clamp((b[i] - mb) / sbb, -2.5, 2.5) * k, Y = oy + sz / 2 - clamp((c[i] - mc) / scc, -2.5, 2.5) * k; i ? g.lineTo(X, Y) : g.moveTo(X, Y); }
+  g.stroke();
+  const r = S.lastAnalysis; $("lissRead").textContent = r ? `TAA ${r.taa.toFixed(0)}° · ${r.phase < 0 ? "chest lags belly" : "chest leads"}` : "TAA – (filling 20 s window)";
+}
+
+// ------------------------------------------------------------ loop
+let last = performance.now(), acc = 0;
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt * P.speed * FS;
+  let steps = 0; while (acc >= 1 && steps < 40) { sample(); deviceTick(); acc -= 1; steps++; }
+  drawMat(); drawCharts(); renderDevice();
+  requestAnimationFrame(frame);
+}
+readControls(); presetSet("pNormal");
+for (let i = 0; i < FS * 2; i++) sample();      // warm the filters so the first frame has data
+renderDevice(true);
+requestAnimationFrame(frame);
+})();
+</script>
+
+</body></html>
